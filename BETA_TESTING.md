@@ -11,6 +11,7 @@ Please test:
 - connection arrows pointing to the correct item when several alerts are active
 - different resolutions/aspect ratios
 - poe.ninja threshold and refresh changes
+- league selector population and switching between available poe.ninja economy leagues
 
 ## Reporting
 

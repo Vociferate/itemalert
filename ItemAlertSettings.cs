@@ -124,6 +124,12 @@ namespace ItemAlert
         public ToggleNode EnablePoeNinjaPriceScanner { get; set; } =
             new ToggleNode(true);
 
+        [Menu(
+            "poe.ninja League",
+            "Populated from poe.ninja's live Path of Exile 1 economy league list. Auto uses poe.ninja's current temporary challenge league.")]
+        public ListNode PoeNinjaLeague { get; set; } =
+            new ListNode { Value = "Auto (Current Challenge League)" };
+
         [Menu("Create Support Bundle",
             "Creates a ZIP containing ItemAlert logs, targets, price-refresh history, detection history, settings, and recent diagnostics.")]
         public ButtonNode CreateSupportBundle { get; set; } =

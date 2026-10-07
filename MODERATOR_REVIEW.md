@@ -6,7 +6,7 @@ ItemAlert is an informational ExileAPI overlay for Path of Exile.
 
 The plugin reads ExileAPI-exposed state including `WorldItem`, `Mods`, `RenderItem.ResourcePath`, `IngameUi.ItemsOnGroundLabels`, and `Label.GetClientRectCache`.
 
-It fetches public poe.ninja economy data over HTTPS and draws overlay UI, including exact ground-label borders and optional connection arrows.
+It fetches public poe.ninja economy data over HTTPS, including the PoE 1 economy-league endpoint and draws overlay UI, including exact ground-label borders and optional connection arrows.
 
 ## It does not
 

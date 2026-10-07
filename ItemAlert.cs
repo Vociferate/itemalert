@@ -81,9 +81,12 @@ namespace ItemAlert
         private DateTime _nextPriceRefresh = DateTime.MinValue;
         private string _targetsFile = string.Empty;
         private string _alwaysTrackFile = string.Empty;
-        private string _leagueOverrideFile = string.Empty;
         private string _priceStatus = "Not loaded";
         private string _activeLeague = string.Empty;
+
+        private const string AutoLeagueLabel = "Auto (Current Challenge League)";
+        private string _lastLeagueSelection = AutoLeagueLabel;
+        private bool _leagueSelectionDirty;
 
 
         public override bool Initialise()
@@ -101,7 +104,6 @@ namespace ItemAlert
             _supportIssueUrlFile = Path.Combine(DirectoryFullName, "SupportIssueUrl.txt");
             _targetsFile = Path.Combine(DirectoryFullName, "Targets_Current.csv");
             _alwaysTrackFile = Path.Combine(DirectoryFullName, "AlwaysTrack.txt");
-            _leagueOverrideFile = Path.Combine(DirectoryFullName, "PoeNinjaLeague.txt");
 
             try
             {
@@ -114,6 +116,16 @@ namespace ItemAlert
                 EnsurePriceScannerFiles();
                 EnsureBetaLogFiles();
                 EnsureSupportIssueConfig();
+
+                // The selector is populated from poe.ninja after the first
+                // successful economy refresh. Auto is always available.
+                Settings.PoeNinjaLeague.SetListValues(
+                    new List<string> { AutoLeagueLabel });
+
+                if (string.IsNullOrWhiteSpace(Settings.PoeNinjaLeague.Value))
+                    Settings.PoeNinjaLeague.Value = AutoLeagueLabel;
+
+                _lastLeagueSelection = Settings.PoeNinjaLeague.Value;
 
                 // Upgrade legacy saved color settings. ExileAPI persists plugin
                 // settings between builds, so changing the source default alone
@@ -132,7 +144,7 @@ namespace ItemAlert
                     _logPath,
                     Environment.NewLine +
                     "======================================================================" + Environment.NewLine +
-                    $"ItemAlert v1.0.0.1 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
+                    $"ItemAlert v1.0.0.2 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
                     $"Logs folder: {_logsFolder}" + Environment.NewLine +
                     "======================================================================" + Environment.NewLine);
 
@@ -146,7 +158,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Failed to initialise Logs folder: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Failed to initialise Logs folder: {ex}");
             }
 
             foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.WorldItem])
@@ -677,7 +689,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] {ex}");
             }
         }
 
@@ -747,7 +759,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Failed writing pair: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Failed writing pair: {ex}");
             }
 
             _unidentifiedSnapshots.Remove(candidate);
@@ -1502,7 +1514,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Beta log setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Beta log setup failed: {ex}");
             }
         }
 
@@ -1514,7 +1526,7 @@ namespace ItemAlert
                 {
                     "",
                     "============================================================",
-                    $"ItemAlert v1.0.0.1 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    $"ItemAlert v1.0.0.2 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"OS={Environment.OSVersion}",
                     $"64BitProcess={Environment.Is64BitProcess}",
                     $"ProcessorCount={Environment.ProcessorCount}",
@@ -1524,6 +1536,7 @@ namespace ItemAlert
                     $"OnlyUnique={Settings.OnlyUnique.Value}",
                     $"OnlyBelts={Settings.OnlyBelts.Value}",
                     $"PoeNinjaScanner={Settings.EnablePoeNinjaPriceScanner.Value}",
+                    $"PoeNinjaLeagueSelection={Settings.PoeNinjaLeague.Value}",
                     $"MinimumDivine={Settings.MinimumDivineValue.Value}",
                     $"MinimumChaos={Settings.MinimumChaosValue.Value}",
                     $"MinimumListings={Settings.MinimumListings.Value}",
@@ -1621,7 +1634,7 @@ namespace ItemAlert
                     "ITEM ALERT BETA SUPPORT BUNDLE",
                     "==============================",
                     $"Created={DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                    "PluginVersion=v1.0.0.1.1",
+                    "PluginVersion=v1.0.0.2.1",
                     $"League={_activeLeague}",
                     $"PriceStatus={_priceStatus}",
                     $"OS={Environment.OSVersion}",
@@ -1635,6 +1648,8 @@ namespace ItemAlert
                     $"OnlyBelts={Settings.OnlyBelts.Value}",
                     $"EnableTargetDetector={Settings.EnableTargetDetector.Value}",
                     $"EnablePoeNinjaPriceScanner={Settings.EnablePoeNinjaPriceScanner.Value}",
+                    $"PoeNinjaLeagueSelection={Settings.PoeNinjaLeague.Value}",
+                    $"ActivePoeNinjaLeague={_activeLeague}",
                     $"MinimumDivineValue={Settings.MinimumDivineValue.Value}",
                     $"MinimumChaosValue={Settings.MinimumChaosValue.Value}",
                     $"MinimumListings={Settings.MinimumListings.Value}",
@@ -1656,7 +1671,6 @@ namespace ItemAlert
 
                 CopyIfExists(_targetsFile, staging);
                 CopyIfExists(_alwaysTrackFile, staging);
-                CopyIfExists(_leagueOverrideFile, staging);
                 CopyIfExists(_logPath, staging);
                 CopyIfExists(_errorsPath, staging);
                 CopyIfExists(_priceLogPath, staging);
@@ -1776,7 +1790,7 @@ namespace ItemAlert
         // ==================================================================
         // SETTINGS MIGRATION
         // ==================================================================
-        // ItemAlert v1.0.0.1 originally shipped Slot 4 as orange
+        // ItemAlert v1.0.0.2 originally shipped Slot 4 as orange
         // (255,150,50,255). ExileAPI persists ColorNode values in the user's
         // settings file, so simply changing the source default to white does
         // not affect an existing installation.
@@ -1895,7 +1909,7 @@ namespace ItemAlert
 
                 var latestBundle = GetLatestSupportBundlePath();
 
-                var title = $"[ItemAlert v1.0.0.1] Bug report";
+                var title = $"[ItemAlert v1.0.0.2] Bug report";
 
                 var body = BuildSupportIssueBody(latestBundle);
 
@@ -1935,7 +1949,7 @@ namespace ItemAlert
 
             return
                 "## ItemAlert Beta Report\n\n" +
-                $"**Plugin version:** v1.0.0.1" +
+                $"**Plugin version:** v1.0.0.2" +
                 $"**League:** {(_activeLeague ?? string.Empty)}\n" +
                 $"**Price status:** {(_priceStatus ?? string.Empty)}\n" +
                 $"**Minimum Divine:** {Settings.MinimumDivineValue.Value}\n" +
@@ -2009,21 +2023,10 @@ namespace ItemAlert
                         });
                 }
 
-                if (!File.Exists(_leagueOverrideFile))
-                {
-                    File.WriteAllLines(
-                        _leagueOverrideFile,
-                        new[]
-                        {
-                            "# Leave blank for the current temporary challenge league.",
-                            "# Or put an exact poe.ninja league id on the next line.",
-                            ""
-                        });
-                }
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Target-file setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Target-file setup failed: {ex}");
             }
         }
 
@@ -2031,6 +2034,21 @@ namespace ItemAlert
         {
             if (!Settings.EnablePoeNinjaPriceScanner)
                 return;
+
+            var selectedLeague =
+                string.IsNullOrWhiteSpace(Settings.PoeNinjaLeague.Value)
+                    ? AutoLeagueLabel
+                    : Settings.PoeNinjaLeague.Value;
+
+            if (!string.Equals(
+                    selectedLeague,
+                    _lastLeagueSelection,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _lastLeagueSelection = selectedLeague;
+                _leagueSelectionDirty = true;
+                _nextPriceRefresh = DateTime.MinValue;
+            }
 
             if (_priceRefreshTask != null && _priceRefreshTask.IsCompleted)
             {
@@ -2046,9 +2064,15 @@ namespace ItemAlert
                             _priceTargetsByName = result.TargetsByName;
                         }
 
-                        _activeLeague = result.League;
+                        ApplyPoeNinjaLeagueOptions(result);
+
+                        _activeLeague =
+                            string.IsNullOrWhiteSpace(result.LeagueName)
+                                ? result.League
+                                : result.LeagueName;
+
                         _priceStatus =
-                            $"{result.Targets.Count} targets | >= {Settings.MinimumDivineValue.Value}d OR >= {Settings.MinimumChaosValue.Value}c";
+                            $"{_activeLeague} | {result.Targets.Count} targets | >= {Settings.MinimumDivineValue.Value}d OR >= {Settings.MinimumChaosValue.Value}c";
                         SaveCurrentTargets(result);
                         AppendPriceLog(
                             $"SUCCESS league={result.League} targets={result.Targets.Count} " +
@@ -2068,12 +2092,62 @@ namespace ItemAlert
                 }
 
                 _priceRefreshTask = null;
-                _nextPriceRefresh = DateTime.Now.AddMinutes(
-                    Math.Max(15, Settings.PoeNinjaRefreshMinutes.Value));
+
+                if (_leagueSelectionDirty)
+                {
+                    _leagueSelectionDirty = false;
+                    _nextPriceRefresh = DateTime.MinValue;
+                }
+                else
+                {
+                    _nextPriceRefresh = DateTime.Now.AddMinutes(
+                        Math.Max(15, Settings.PoeNinjaRefreshMinutes.Value));
+                }
             }
 
             if (_priceRefreshTask == null && DateTime.Now >= _nextPriceRefresh)
                 StartPriceRefresh();
+        }
+
+        private void ApplyPoeNinjaLeagueOptions(
+            PriceRefreshResult result)
+        {
+            if (result?.AvailableLeagues == null ||
+                result.AvailableLeagues.Count == 0)
+                return;
+
+            var values = new List<string>
+            {
+                AutoLeagueLabel
+            };
+
+            values.AddRange(
+                result.AvailableLeagues
+                    .Select(x => x.Name)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+
+            var current =
+                string.IsNullOrWhiteSpace(Settings.PoeNinjaLeague.Value)
+                    ? AutoLeagueLabel
+                    : Settings.PoeNinjaLeague.Value;
+
+            Settings.PoeNinjaLeague.SetListValues(values);
+
+            if (values.Any(x =>
+                    string.Equals(
+                        x,
+                        current,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                Settings.PoeNinjaLeague.Value = current;
+            }
+            else
+            {
+                Settings.PoeNinjaLeague.Value = AutoLeagueLabel;
+            }
+
+            _lastLeagueSelection = Settings.PoeNinjaLeague.Value;
         }
 
         private void StartPriceRefresh()
@@ -2086,6 +2160,10 @@ namespace ItemAlert
             var minimumDivines = Settings.MinimumDivineValue.Value;
             var minimumChaos = Settings.MinimumChaosValue.Value;
             var minimumListings = Settings.MinimumListings.Value;
+            var leagueSelection =
+                string.IsNullOrWhiteSpace(Settings.PoeNinjaLeague.Value)
+                    ? AutoLeagueLabel
+                    : Settings.PoeNinjaLeague.Value;
 
             var categories = new List<string>();
 
@@ -2105,7 +2183,8 @@ namespace ItemAlert
                     minimumDivines,
                     minimumChaos,
                     minimumListings,
-                    categories));
+                    categories,
+                    leagueSelection));
         }
 
         // ==================================================================
@@ -2119,7 +2198,8 @@ namespace ItemAlert
             int minimumDivines,
             int minimumChaos,
             int minimumListings,
-            List<string> categories)
+            List<string> categories,
+            string leagueSelection)
         {
             var result = new PriceRefreshResult
             {
@@ -2127,7 +2207,8 @@ namespace ItemAlert
                 Targets = new Dictionary<string, PriceTarget>(
                     StringComparer.OrdinalIgnoreCase),
                 TargetsByName = new Dictionary<string, PriceTarget>(
-                    StringComparer.OrdinalIgnoreCase)
+                    StringComparer.OrdinalIgnoreCase),
+                AvailableLeagues = new List<PoeNinjaLeagueOption>()
             };
 
             try
@@ -2137,33 +2218,66 @@ namespace ItemAlert
                 if (!PoeNinjaHttp.DefaultRequestHeaders.UserAgent.Any())
                 {
                     PoeNinjaHttp.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "ItemAlert/2.8 (personal ExileAPI economy scanner)");
+                        "ItemAlert/1.0.0.2 (+https://github.com/Vociferate/itemalert)");
                 }
 
-                var league = ReadLeagueOverride();
+                // Always use poe.ninja's live PoE 1 economy-league list.
+                // This avoids hard-coding Standard/Hardcore/challenge variants
+                // and automatically follows future leagues.
+                var leaguesJson = await PoeNinjaHttp.GetStringAsync(
+                    "https://poe.ninja/poe1/api/economy/leagues");
 
-                if (string.IsNullOrWhiteSpace(league))
+                using var leaguesDoc = JsonDocument.Parse(leaguesJson);
+
+                if (leaguesDoc.RootElement.ValueKind != JsonValueKind.Array ||
+                    leaguesDoc.RootElement.GetArrayLength() == 0)
+                    throw new InvalidOperationException("No poe.ninja economy leagues returned.");
+
+                foreach (var leagueElement in leaguesDoc.RootElement.EnumerateArray())
                 {
-                    var leaguesJson = await PoeNinjaHttp.GetStringAsync(
-                        "https://poe.ninja/poe1/api/economy/leagues");
+                    var id = GetJsonString(leagueElement, "id");
+                    var name = GetJsonString(leagueElement, "name");
 
-                    using var leaguesDoc = JsonDocument.Parse(leaguesJson);
+                    if (string.IsNullOrWhiteSpace(id))
+                        continue;
 
-                    if (leaguesDoc.RootElement.ValueKind != JsonValueKind.Array ||
-                        leaguesDoc.RootElement.GetArrayLength() == 0)
-                        throw new InvalidOperationException("No poe.ninja leagues returned.");
-
-                    var first = leaguesDoc.RootElement[0];
-
-                    league = first.TryGetProperty("id", out var id)
-                        ? id.GetString()
-                        : null;
-
-                    if (string.IsNullOrWhiteSpace(league))
-                        throw new InvalidOperationException("Current league id missing.");
+                    result.AvailableLeagues.Add(
+                        new PoeNinjaLeagueOption
+                        {
+                            Id = id,
+                            Name = string.IsNullOrWhiteSpace(name) ? id : name
+                        });
                 }
+
+                if (result.AvailableLeagues.Count == 0)
+                    throw new InvalidOperationException("poe.ninja returned no usable economy leagues.");
+
+                PoeNinjaLeagueOption selectedLeague = null;
+
+                if (!string.IsNullOrWhiteSpace(leagueSelection) &&
+                    !string.Equals(
+                        leagueSelection,
+                        AutoLeagueLabel,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    selectedLeague = result.AvailableLeagues.FirstOrDefault(x =>
+                        string.Equals(
+                            x.Name,
+                            leagueSelection,
+                            StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(
+                            x.Id,
+                            leagueSelection,
+                            StringComparison.OrdinalIgnoreCase));
+                }
+
+                // Auto uses the first league returned by poe.ninja.
+                selectedLeague ??= result.AvailableLeagues[0];
+
+                var league = selectedLeague.Id;
 
                 result.League = league;
+                result.LeagueName = selectedLeague.Name;
 
                 foreach (var category in categories)
                 {
@@ -2295,30 +2409,6 @@ namespace ItemAlert
             }
         }
 
-        private string ReadLeagueOverride()
-        {
-            try
-            {
-                if (!File.Exists(_leagueOverrideFile))
-                    return string.Empty;
-
-                foreach (var raw in File.ReadAllLines(_leagueOverrideFile))
-                {
-                    var line = raw.Trim();
-
-                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
-                        continue;
-
-                    return line;
-                }
-            }
-            catch
-            {
-            }
-
-            return string.Empty;
-        }
-
         private void LoadAlwaysTrack(Dictionary<string, PriceTarget> targets)
         {
             try
@@ -2367,7 +2457,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.1] AlwaysTrack load failed: {ex}");
+                    $"[ItemAlert v1.0.0.2] AlwaysTrack load failed: {ex}");
             }
         }
 
@@ -2424,7 +2514,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.1] Could not save Targets_Current.csv: {ex}");
+                    $"[ItemAlert v1.0.0.2] Could not save Targets_Current.csv: {ex}");
             }
         }
 
@@ -2527,7 +2617,7 @@ namespace ItemAlert
 
                 var summary = new List<string>
                 {
-                    "ITEM ALERT v1.0.0.1 - FULL ITEM COMPONENT SCAN",
+                    "ITEM ALERT v1.0.0.2 - FULL ITEM COMPONENT SCAN",
                     "================================================",
                     $"CaptureId=C{s.CaptureId:0000}",
                     $"Time={s.Time:yyyy-MM-dd HH:mm:ss.fff}",
@@ -2632,7 +2722,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Component scan failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Component scan failed: {ex}");
             }
         }
 
@@ -3137,13 +3227,21 @@ namespace ItemAlert
             public bool AlwaysTrack { get; set; }
         }
 
+        private sealed class PoeNinjaLeagueOption
+        {
+            public string Id { get; set; }
+            public string Name { get; set; }
+        }
+
         private sealed class PriceRefreshResult
         {
             public bool Success { get; set; }
             public string League { get; set; }
+            public string LeagueName { get; set; }
             public string Error { get; set; }
             public Dictionary<string, PriceTarget> Targets { get; set; }
             public Dictionary<string, PriceTarget> TargetsByName { get; set; }
+            public List<PoeNinjaLeagueOption> AvailableLeagues { get; set; }
         }
 
         private sealed class AlertLayout

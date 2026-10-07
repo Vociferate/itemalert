@@ -33,6 +33,21 @@ For an unidentified unique, the unique name may not yet be available through nor
 
 ItemAlert matches that resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
 
+## poe.ninja League Selection
+
+ItemAlert loads the available Path of Exile 1 **economy leagues directly from poe.ninja** instead of hard-coding league names.
+
+The selector includes:
+
+- **Auto (Current Challenge League)** — uses the first league returned by poe.ninja
+- every other active economy league returned by poe.ninja
+
+This means Standard, Hardcore, the current challenge league, Hardcore challenge variants, and any other economy league supported by poe.ninja can appear automatically when available.
+
+SSF leagues are shown only if poe.ninja exposes them through its economy-league endpoint. If poe.ninja does not provide economy pricing for a league, ItemAlert does not invent or substitute prices for it.
+
+Changing the selected league automatically triggers a fresh price scan.
+
 ## Multiple Simultaneous Drops
 
 The default visible maximum is six, configurable up to ten.
@@ -146,7 +161,7 @@ Support bundles can contain local filesystem paths. Review them before posting p
 
 ## Version
 
-**v1.0.0.1**
+**v1.0.0.2**
 
 ## License
 
