@@ -1,0 +1,12 @@
+Initial public release of ItemAlert for ExileAPI.
+
+Includes:
+- poe.ninja-driven value targeting
+- unidentified unique detection using RenderItem.ResourcePath
+- multiple simultaneous alerts
+- detection-order color slots
+- exact ground-label highlighting
+- pickup-driven alert removal
+- resolution-independent X/Y positioning
+- support bundle generation
+- GitHub issue workflow
