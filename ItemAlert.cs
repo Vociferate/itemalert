@@ -97,9 +97,22 @@ namespace ItemAlert
         private bool _leagueSelectionDirty;
 
 
+        private string _pluginSourceFolder = string.Empty;
+        private string _supportStatusPath = string.Empty;
+        private string _lastSupportStatus = "Ready";
+
         public override bool Initialise()
         {
-            _logsFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plugins", "Source", "ItemAlert", "Logs");
+            // Use one explicit source folder for every support-related file.
+            // This avoids differences between DirectoryFullName and the source
+            // plugin path on different ExileAPI loaders/builds.
+            _pluginSourceFolder = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "Plugins",
+                "Source",
+                "ItemAlert");
+
+            _logsFolder = Path.Combine(_pluginSourceFolder, "Logs");
             _capturesFolder = Path.Combine(_logsFolder, "Captures");
             _pairsFolder = Path.Combine(_logsFolder, "Pairs");
             _componentCapturesFolder = Path.Combine(_logsFolder, "ComponentCaptures");
@@ -108,10 +121,16 @@ namespace ItemAlert
             _errorsPath = Path.Combine(_logsFolder, "Errors.log");
             _priceLogPath = Path.Combine(_logsFolder, "PriceRefresh.log");
             _detectionsPath = Path.Combine(_logsFolder, "Detections.csv");
-            _supportBundlesFolder = Path.Combine(DirectoryFullName, "SupportBundles");
-            _supportIssueUrlFile = Path.Combine(DirectoryFullName, "SupportIssueUrl.txt");
-            _targetsFile = Path.Combine(DirectoryFullName, "Targets_Current.csv");
-            _alwaysTrackFile = Path.Combine(DirectoryFullName, "AlwaysTrack.txt");
+            _supportBundlesFolder = Path.Combine(_pluginSourceFolder, "SupportBundles");
+            _supportIssueUrlFile = Path.Combine(_pluginSourceFolder, "SupportIssueUrl.txt");
+            _supportStatusPath = Path.Combine(_pluginSourceFolder, "SupportStatus.txt");
+            _targetsFile = Path.Combine(_pluginSourceFolder, "Targets_Current.csv");
+            _alwaysTrackFile = Path.Combine(_pluginSourceFolder, "AlwaysTrack.txt");
+
+            // Bind support buttons BEFORE any other initialization work. If a
+            // later initialization step fails, support controls still work.
+            Settings.CreateSupportBundle.OnPressed = HandleCreateSupportBundleClick;
+            Settings.OpenSupportIssue.OnPressed = OpenSupportIssue;
 
             try
             {
@@ -142,17 +161,11 @@ namespace ItemAlert
 
                 WriteStartupDiagnostics();
 
-                // These buttons are deliberately user-initiated. Nothing is
-                // uploaded and no browser is opened without the tester clicking.
-                Settings.CreateSupportBundle.OnPressed = () => CreateSupportBundle();
-                Settings.OpenSupportIssue.OnPressed = OpenSupportIssue;
-
-
                 File.AppendAllText(
                     _logPath,
                     Environment.NewLine +
                     "======================================================================" + Environment.NewLine +
-                    $"ItemAlert v1.0.0.4 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
+                    $"ItemAlert v1.0.0.5 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
                     $"Logs folder: {_logsFolder}" + Environment.NewLine +
                     "======================================================================" + Environment.NewLine);
 
@@ -166,7 +179,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Failed to initialise Logs folder: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] Failed to initialise Logs folder: {ex}");
             }
 
             foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.WorldItem])
@@ -267,6 +280,24 @@ namespace ItemAlert
         {
             // Draw the normal user-facing controls first.
             base.DrawSettings();
+
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Text("ItemAlert Support");
+
+            if (ImGui.Button("Create Support Bundle##ItemAlertDirect"))
+                HandleCreateSupportBundleClick();
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Open Support Issue##ItemAlertDirect"))
+                OpenSupportIssue();
+
+            ImGui.TextWrapped(
+                $"Status: {_lastSupportStatus}");
+
+            ImGui.TextDisabled(
+                $"Bundle folder: {_supportBundlesFolder}");
 
             ImGui.Spacing();
             ImGui.Separator();
@@ -740,7 +771,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] {ex}");
             }
         }
 
@@ -810,7 +841,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Failed writing pair: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] Failed writing pair: {ex}");
             }
 
             _unidentifiedSnapshots.Remove(candidate);
@@ -1708,7 +1739,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Beta log setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] Beta log setup failed: {ex}");
             }
         }
 
@@ -1720,7 +1751,7 @@ namespace ItemAlert
                 {
                     "",
                     "============================================================",
-                    $"ItemAlert v1.0.0.4 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    $"ItemAlert v1.0.0.5 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"OS={Environment.OSVersion}",
                     $"64BitProcess={Environment.Is64BitProcess}",
                     $"ProcessorCount={Environment.ProcessorCount}",
@@ -1806,11 +1837,73 @@ namespace ItemAlert
             }
         }
 
+        private void HandleCreateSupportBundleClick()
+        {
+            // First write a tiny marker. If this file appears, we know ExileAPI
+            // invoked the button callback even if ZIP creation later fails.
+            WriteSupportStatus(
+                $"CLICK RECEIVED {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+            var bundlePath = CreateSupportBundle();
+
+            if (!string.IsNullOrWhiteSpace(bundlePath) &&
+                File.Exists(bundlePath))
+            {
+                WriteSupportStatus(
+                    $"SUCCESS {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                    $"Bundle={bundlePath}");
+
+                _lastSupportStatus =
+                    $"Support bundle created: {Path.GetFileName(bundlePath)}";
+            }
+            else
+            {
+                WriteSupportStatus(
+                    $"FAILED {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                    "CreateSupportBundle returned no valid ZIP.");
+
+                _lastSupportStatus =
+                    "Support bundle creation failed. See SupportStatus.txt / Errors.log.";
+            }
+        }
+
+        private void WriteSupportStatus(string message)
+        {
+            _lastSupportStatus = message ?? string.Empty;
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_pluginSourceFolder))
+                    Directory.CreateDirectory(_pluginSourceFolder);
+
+                if (!string.IsNullOrWhiteSpace(_supportStatusPath))
+                {
+                    File.WriteAllText(
+                        _supportStatusPath,
+                        (_lastSupportStatus ?? string.Empty) +
+                        Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // Status output must never crash the plugin.
+            }
+        }
+
         private string CreateSupportBundle()
         {
             try
             {
+                WriteSupportStatus(
+                    $"STARTING {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                    $"PluginFolder={_pluginSourceFolder}{Environment.NewLine}" +
+                    $"SupportFolder={_supportBundlesFolder}");
+
                 Directory.CreateDirectory(_supportBundlesFolder);
+
+                WriteSupportStatus(
+                    $"FOLDER CREATED {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                    $"SupportFolder={_supportBundlesFolder}");
 
                 var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 var staging = Path.Combine(
@@ -1828,7 +1921,7 @@ namespace ItemAlert
                     "ITEMALERT SUPPORT BUNDLE",
                     "==============================",
                     $"Created={DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                    "PluginVersion=v1.0.0.4",
+                    "PluginVersion=v1.0.0.5",
                     $"League={_activeLeague}",
                     $"PriceStatus={_priceStatus}",
                     $"OS={Environment.OSVersion}",
@@ -1901,6 +1994,12 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 LogBetaError("CreateSupportBundle", ex);
+
+                WriteSupportStatus(
+                    $"ERROR {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                    $"{ex.GetType().FullName}: {ex.Message}{Environment.NewLine}" +
+                    ex.StackTrace);
+
                 DebugWindow.LogError(
                     $"[ItemAlert] Failed to create support bundle: {ex.Message}",
                     8);
@@ -1987,7 +2086,7 @@ namespace ItemAlert
         // ==================================================================
         // SETTINGS MIGRATION
         // ==================================================================
-        // ItemAlert v1.0.0.4 originally shipped Slot 4 as orange
+        // ItemAlert v1.0.0.5 originally shipped Slot 4 as orange
         // (255,150,50,255). ExileAPI persists ColorNode values in the user's
         // settings file, so simply changing the source default to white does
         // not affect an existing installation.
@@ -2111,21 +2210,30 @@ namespace ItemAlert
 
                 // Create a fresh bundle immediately before opening GitHub so the
                 // tester has a current ZIP ready to attach.
-                var bundlePath = CreateSupportBundle();
-                var bundleName =
-                    string.IsNullOrWhiteSpace(bundlePath)
-                        ? "No support bundle was created."
-                        : Path.GetFileName(bundlePath);
+                HandleCreateSupportBundleClick();
+
+                var bundlePath = GetLatestSupportBundlePath();
+
+                if (string.IsNullOrWhiteSpace(bundlePath) ||
+                    !File.Exists(bundlePath))
+                {
+                    DebugWindow.LogError(
+                        "[ItemAlert] Support bundle could not be created. Check SupportStatus.txt.",
+                        10);
+                    return;
+                }
+
+                var bundleName = Path.GetFileName(bundlePath);
 
                 // Keep the URL intentionally short. Very long shell URLs can fail
                 // to launch reliably on Windows. Detailed diagnostics live in the
                 // support ZIP instead.
                 var title =
-                    $"[ItemAlert v1.0.0.4] Support issue";
+                    $"[ItemAlert v1.0.0.5] Support issue";
 
                 var body =
                     "## ItemAlert Support Report\n\n" +
-                    $"**Version:** v1.0.0.4\n" +
+                    $"**Version:** v1.0.0.5\n" +
                     $"**League:** {_activeLeague}\n" +
                     $"**Support bundle:** `{bundleName}`\n\n" +
                     "### What happened?\n" +
@@ -2305,7 +2413,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Target-file setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] Target-file setup failed: {ex}");
             }
         }
 
@@ -2499,7 +2607,7 @@ namespace ItemAlert
                 if (!PoeNinjaHttp.DefaultRequestHeaders.UserAgent.Any())
                 {
                     PoeNinjaHttp.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "ItemAlert/1.0.0.4 (+https://github.com/Vociferate/itemalert)");
+                        "ItemAlert/1.0.0.5 (+https://github.com/Vociferate/itemalert)");
                 }
 
                 // Always use poe.ninja's live PoE 1 economy-league list.
@@ -2738,7 +2846,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.4] AlwaysTrack load failed: {ex}");
+                    $"[ItemAlert v1.0.0.5] AlwaysTrack load failed: {ex}");
             }
         }
 
@@ -2795,7 +2903,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.4] Could not save Targets_Current.csv: {ex}");
+                    $"[ItemAlert v1.0.0.5] Could not save Targets_Current.csv: {ex}");
             }
         }
 
@@ -2898,7 +3006,7 @@ namespace ItemAlert
 
                 var summary = new List<string>
                 {
-                    "ITEM ALERT v1.0.0.4 - FULL ITEM COMPONENT SCAN",
+                    "ITEM ALERT v1.0.0.5 - FULL ITEM COMPONENT SCAN",
                     "================================================",
                     $"CaptureId=C{s.CaptureId:0000}",
                     $"Time={s.Time:yyyy-MM-dd HH:mm:ss.fff}",
@@ -3003,7 +3111,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Component scan failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.5] Component scan failed: {ex}");
             }
         }
 

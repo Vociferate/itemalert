@@ -224,6 +224,10 @@ Then restart or reload ExileAPI.
 
 Large raw diagnostic files are not included by default.
 
+### Support Status
+
+Support actions write `SupportStatus.txt` directly into the `ItemAlert` plugin folder. If bundle creation fails, this file records whether the button callback fired and the exact failure message.
+
 ### Open Support Issue
 
 **Open Support Issue** now performs three user-initiated steps:
@@ -297,7 +301,7 @@ Review support bundles before posting them publicly if that information is sensi
 
 ## Version
 
-**v1.0.0.4**
+**v1.0.0.5**
 
 ## License
 

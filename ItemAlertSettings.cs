@@ -130,13 +130,11 @@ namespace ItemAlert
         public ListNode PoeNinjaLeague { get; set; } =
             new ListNode { Value = "Auto (Current Challenge League)" };
 
-        [Menu("Create Support Bundle",
-            "Creates a ZIP containing ItemAlert logs, targets, price-refresh history, detection history, settings, and recent diagnostics.")]
+        [IgnoreMenu]
         public ButtonNode CreateSupportBundle { get; set; } =
             new ButtonNode();
 
-        [Menu("Open Support Issue",
-            "Creates a fresh support bundle, opens the ItemAlert GitHub issue page, and opens the local SupportBundles folder so the ZIP can be attached. Nothing is submitted automatically.")]
+        [IgnoreMenu]
         public ButtonNode OpenSupportIssue { get; set; } =
             new ButtonNode();
 
