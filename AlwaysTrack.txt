@@ -1,0 +1,10 @@
+# UniqueItemProbe v1.0.0
+# Name|RenderItem.ResourcePath|OptionalDivineValue
+#
+# Items here are always tracked even if poe.ninja has no price,
+# insufficient listings, or is temporarily unavailable.
+#
+# Angler's Plait is intentionally permanent because market data can be sparse.
+Angler's Plait|Art/2DItems/Rings/AnglersPlait.dds|0
+Mageblood|Art/2DItems/Belts/InjectorBelt.dds|0
+Headhunter|Art/2DItems/Belts/Headhunter.dds|0

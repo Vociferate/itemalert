@@ -1,0 +1,4 @@
+# Leave this file with no non-comment text to use poe.ninja's
+# current temporary challenge league automatically.
+#
+# To force a specific poe.ninja league, put its exact league id below.

@@ -1,16 +1,14 @@
-# Item Alert
+# ItemAlert
 
-Item Alert is an ExileAPI plugin for Path of Exile that detects configured high-value unique drops, shows their estimated market value, and highlights the exact ground-item label so the drop is easy to locate.
+ItemAlert is an ExileAPI plugin for Path of Exile that detects configured high-value unique drops, shows their estimated market value, and highlights the exact ground-item label so the drop is easy to locate.
 
 It uses item artwork/resource paths exposed by ExileAPI together with current poe.ninja economy data.
 
+## Screenshot / Demo
+
+https://imgur.com/a/D80nBTq
+
 ## Features
-
-## Screenshots
-
-![Item Alert Screenshot 1](https://i.imgur.com/u2q4GyV.png)
-
-![Item Alert Screenshot 2](https://i.imgur.com/k42HMQU.png)
 
 - Detects valuable uniques while still unidentified
 - Tracks the same ground item through identified/unidentified label changes
@@ -32,7 +30,7 @@ It uses item artwork/resource paths exposed by ExileAPI together with current po
 
 For an unidentified unique, the unique name may not yet be available through normal item metadata. ExileAPI can expose the unique-specific inventory artwork through `RenderItem.ResourcePath`.
 
-Item Alert matches that resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
+ItemAlert matches that resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
 
 ## Multiple Simultaneous Drops
 
@@ -53,7 +51,7 @@ Each alert retains the exact ground entity that caused it, so multiple copies of
 
 ## Ground-Label Highlighting
 
-Item Alert draws one configurable border around the exact ground-item label Path of Exile is rendering.
+ItemAlert draws one configurable border around the exact ground-item label Path of Exile is rendering.
 
 Because the rectangle comes from ExileAPI's rendered label, it naturally follows loot-filter font size, text width, UI scale, resolution, and identified/unidentified label changes.
 
@@ -90,3 +88,51 @@ Copy the `ItemAlert` folder into:
 
 ```text
 ExileApi/Plugins/Source/
+```
+
+Then restart or reload ExileAPI.
+
+## Support
+
+**Create Support Bundle** creates a local diagnostic ZIP.
+
+**Open Support Issue** opens:
+
+https://github.com/Vociferate/itemalert/issues/new
+
+in the default browser with report details prefilled.
+
+No GitHub token is used. Nothing is uploaded or submitted automatically.
+
+## Advanced Diagnostics
+
+The collapsed **Advanced / Diagnostic Scanner** is disabled by default and is not required for normal detection, pricing, alerts, or highlighting.
+
+
+## Silent Operation
+
+Normal scanning is silent. ItemAlert does not print routine capture, scan, or debug messages on screen.
+
+Visible output is limited to:
+
+- a qualifying valuable-item alert
+- the matching ground-label highlight
+- genuine error messages when something fails
+
+Routine diagnostics are written to local log files instead.
+
+## Safety / Scope
+
+ItemAlert is an informational overlay. It does not automate looting, click items, send input, move the player, modify game memory, decrypt network traffic, bypass anti-cheat, or automatically upload diagnostic files.
+
+## Privacy
+
+Support bundles can contain local filesystem paths. Review them before posting publicly if your path contains information you do not want to share.
+
+## Version
+
+**v1.0.0**
+
+## License
+
+See `LICENSE`.

@@ -1,0 +1,2 @@
+# ItemAlert support issue URL
+https://github.com/Vociferate/itemalert/issues/new
