@@ -1,95 +1,86 @@
 # Item Alert
 
-Item Alert is an ExileAPI plugin for Path of Exile that detects high-value unique item drops before identification by matching their item artwork/resource path and comparing them against live poe.ninja economy data.
+Item Alert is an ExileAPI plugin for Path of Exile that detects configured high-value unique drops, shows their estimated market value, and highlights the exact ground-item label so the drop is easy to locate.
+
+It uses item artwork/resource paths exposed by ExileAPI together with current poe.ninja economy data.
 
 ## Features
 
-- Detects valuable unidentified unique items
-- Uses `RenderItem.ResourcePath` for item identification
-- Pulls live pricing data from poe.ninja
-- Supports both Divine and Chaos value thresholds
-- Tracks unique:
-  - Accessories
-  - Armour
-  - Weapons
-  - Jewels
-  - Flasks
-- Displays a temporary center-screen alert
-- Shows the estimated item value
-- Draws an arrow toward the detected ground item
-- Supports manually tracked items such as Angler's Plait
-- Includes beta logging and diagnostic tools
-- Includes one-click support bundle creation
-- Can open a prefilled GitHub support issue for beta testers
+- Detects valuable uniques while still unidentified
+- Tracks the same ground item through identified/unidentified label changes
+- Uses `RenderItem.ResourcePath` for unique artwork matching
+- Pulls current pricing from poe.ninja
+- Supports Divine, Chaos, and minimum-listing thresholds
+- Tracks unique accessories, armour, weapons, jewels, and optional flasks
+- Supports manual targets through `AlwaysTrack.txt`
+- Handles several valuable drops from the same loot event
+- Uses a high-priority detection queue for burst drops
+- Highlights the exact rendered Path of Exile ground-item label
+- Assigns colors by detection order only
+- Keeps alerts visible until the exact item is picked up or removed
+- Automatically re-stacks remaining alerts
+- Uses resolution-independent center-relative X/Y positioning
+- Includes support bundles and a browser-based GitHub issue workflow
 
-## How It Works
+## Detection
 
-Item Alert reads item information already exposed through ExileAPI.
+For an unidentified unique, the unique name may not yet be available through normal item metadata. ExileAPI can expose the unique-specific inventory artwork through `RenderItem.ResourcePath`.
 
-For unidentified unique items, the normal unique name may not yet be available. However, the item's `RenderItem.ResourcePath` can already contain the unique-specific inventory artwork path.
+Item Alert matches that resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
 
-Item Alert compares that artwork path against its target list and uses current poe.ninja economy data to determine whether the item meets the configured value threshold.
+## Multiple Simultaneous Drops
 
-The plugin only draws an overlay notification. It does not automatically loot items or interact with the game.
+The default visible maximum is six, configurable up to ten.
 
-## Price Filtering
+Default detection-order colors:
 
-Users can configure:
+1. Magenta
+2. Cyan
+3. Green
+4. White
+5. Yellow
+6. Violet
 
-- Minimum Divine value
-- Minimum Chaos value
-- Minimum listing count
-- poe.ninja refresh interval
+Colors are not tied to Mageblood, Headhunter, base type, rarity, category, or value.
 
-An item is tracked when it meets either the configured Divine or Chaos threshold.
+Each alert retains the exact ground entity that caused it, so multiple copies of the same unique can be highlighted independently.
 
-## Alerts
+## Ground-Label Highlighting
 
-When a tracked item is detected, Item Alert displays:
+Item Alert draws one configurable border around the exact ground-item label Path of Exile is rendering.
 
-- Unique item name
-- Current or estimated market value
-- A directional arrow pointing toward the ground item
+Because the rectangle comes from ExileAPI's rendered label, it naturally follows loot-filter font size, text width, UI scale, resolution, and identified/unidentified label changes.
 
-The alert disappears automatically after a few seconds.
+Users can configure highlight padding, border thickness, and corner rounding.
+
+## Alert Position and Appearance
+
+`X = 0` and `Y = 0` is the center of the current Path of Exile game window.
+
+- negative X moves left
+- positive X moves right
+- negative Y moves up
+- positive Y moves down
+
+Offsets scale to the current game-window dimensions, including ultrawide and windowed clients.
+
+## Alert Lifetime
+
+Alerts do not expire on a timer.
+
+A toast and highlight remain visible while that exact ground `WorldItem` exists. When the item is picked up or removed, its toast/highlight disappear and remaining alerts re-stack.
+
+## High-Priority Drop Scanning
+
+High-value detection runs in a dedicated lightweight queue separate from heavier diagnostics. Burst loot events are therefore not throttled by the diagnostic `MaxItemsPerTick` setting.
 
 ## Manual Tracking
 
-`AlwaysTrack.txt` can be used for uniques that should always trigger regardless of current market price.
-
-This is useful for extremely rare or low-volume items where public market data may not be reliable.
-
-## Beta Testing and Support
-
-Item Alert includes built-in beta support tools.
-
-### Create Support Bundle
-
-Creates a ZIP containing relevant diagnostic information such as:
-
-- Plugin version
-- Current settings
-- Current target list
-- Detection history
-- poe.ninja refresh history
-- Error logs
-- Recent diagnostic summaries
-
-### Open Support Issue
-
-Opens a prefilled GitHub issue in the user's default browser.
-
-No GitHub token is used and nothing is automatically submitted or uploaded. The tester can review the report and manually attach the generated support bundle.
-
-## Diagnostic Component Scanner
-
-The Component Scanner is an optional debugging tool used to inspect item components and resource paths.
-
-It is disabled by default and is not required for normal Item Alert operation.
+`AlwaysTrack.txt` can force selected uniques to remain targets regardless of current market value.
 
 ## Installation
 
-Place the `ItemAlert` folder inside:
+Copy the `ItemAlert` folder into:
 
 ```text
 ExileApi/Plugins/Source/
