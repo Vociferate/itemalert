@@ -132,7 +132,7 @@ namespace ItemAlert
                     _logPath,
                     Environment.NewLine +
                     "======================================================================" + Environment.NewLine +
-                    $"ItemAlert v1.0.0 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
+                    $"ItemAlert v1.0.0.1 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
                     $"Logs folder: {_logsFolder}" + Environment.NewLine +
                     "======================================================================" + Environment.NewLine);
 
@@ -146,7 +146,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] Failed to initialise Logs folder: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Failed to initialise Logs folder: {ex}");
             }
 
             foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.WorldItem])
@@ -677,7 +677,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] {ex}");
             }
         }
 
@@ -747,7 +747,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] Failed writing pair: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Failed writing pair: {ex}");
             }
 
             _unidentifiedSnapshots.Remove(candidate);
@@ -910,8 +910,9 @@ namespace ItemAlert
         // ==================================================================
         // USER-VISIBLE ALERT RENDERING
         // ==================================================================
-        // Pure overlay rendering: shows the detected name/value and points at
-        // the existing ground-item entity. This does not click, loot, move the
+        // Pure overlay rendering: shows the detected name/value, highlights the
+        // exact ground label, and can draw a color-matched connection arrow.
+        // This does not click, loot, move the
         // player, inject input, or modify game state.
         // ==================================================================
         private void RenderTargetAlerts()
@@ -1013,8 +1014,8 @@ namespace ItemAlert
                 var slotColor = GetAlertSlotColor(i);
 
                 // Background stays user-configurable and consistent. Border,
-                // title, arrow, and target marker use the slot color when
-                // per-alert colors are enabled.
+                // title, label highlight, and connection arrow use the same
+                // detection-order slot color.
                 Graphics.DrawBox(
                     rect,
                     Settings.AlertBackgroundColor.Value,
@@ -1027,9 +1028,19 @@ namespace ItemAlert
                     Settings.AlertBorderThickness.Value,
                     0);
 
-                DrawGroundItemLabelHighlight(
-                    alert,
-                    slotColor);
+                if (TryGetGroundItemLabelRect(
+                        alert,
+                        out var groundLabelRect))
+                {
+                    DrawGroundItemLabelHighlight(
+                        groundLabelRect,
+                        slotColor);
+
+                    DrawConnectionArrow(
+                        rect,
+                        groundLabelRect,
+                        slotColor);
+                }
 
                 Graphics.DrawText(
                     layout.Line1,
@@ -1240,13 +1251,15 @@ namespace ItemAlert
         // detected from RenderItem artwork and the box follows the same world
         // entity whether the item is unidentified or identified.
         // ==================================================================
-        private void DrawGroundItemLabelHighlight(
+        private bool TryGetGroundItemLabelRect(
             TargetAlert alert,
-            Color slotColor)
+            out RectangleF labelRect)
         {
+            labelRect = default;
+
             if (!Settings.HighlightGroundItemLabel.Value ||
                 alert?.GroundEntity == null)
-                return;
+                return false;
 
             try
             {
@@ -1254,7 +1267,7 @@ namespace ItemAlert
                     GameController.Game?.IngameState?.IngameUi?.ItemsOnGroundLabels;
 
                 if (labels == null)
-                    return;
+                    return false;
 
                 var groundLabel = labels.FirstOrDefault(x =>
                     x != null &&
@@ -1265,35 +1278,46 @@ namespace ItemAlert
                     x.Label != null);
 
                 if (groundLabel?.Label == null)
-                    return;
+                    return false;
 
-                var labelRect = groundLabel.Label.GetClientRectCache;
+                var rawRect = groundLabel.Label.GetClientRectCache;
 
-                if (labelRect.Width <= 0 ||
-                    labelRect.Height <= 0)
-                    return;
+                if (rawRect.Width <= 0 ||
+                    rawRect.Height <= 0)
+                    return false;
 
                 var padding = Settings.GroundHighlightPadding.Value;
 
-                var highlightRect = new RectangleF(
-                    labelRect.X - padding,
-                    labelRect.Y - padding,
-                    labelRect.Width + padding * 2f,
-                    labelRect.Height + padding * 2f);
+                labelRect = new RectangleF(
+                    rawRect.X - padding,
+                    rawRect.Y - padding,
+                    rawRect.Width + padding * 2f,
+                    rawRect.Height + padding * 2f);
 
-                var thickness =
-                    Settings.GroundHighlightBorderThickness.Value;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogBetaError(
+                    "TryGetGroundItemLabelRect",
+                    ex);
 
-                var radius =
-                    Settings.GroundHighlightCornerRadius.Value;
+                return false;
+            }
+        }
 
+        private void DrawGroundItemLabelHighlight(
+            RectangleF highlightRect,
+            Color slotColor)
+        {
+            try
+            {
                 Graphics.DrawFrame(
                     highlightRect,
                     slotColor,
-                    radius,
-                    thickness,
+                    Settings.GroundHighlightCornerRadius.Value,
+                    Settings.GroundHighlightBorderThickness.Value,
                     0);
-
             }
             catch (Exception ex)
             {
@@ -1301,6 +1325,160 @@ namespace ItemAlert
                     "DrawGroundItemLabelHighlight",
                     ex);
             }
+        }
+
+        // ==================================================================
+        // CONNECTION ARROWS
+        // ==================================================================
+        // Each arrow uses the same detection-order color as its toast and
+        // highlighted ground label.
+        //
+        // Geometry:
+        // - Start exactly on the nearest corner of the toast rectangle.
+        // - End exactly on the closest point of the ground-label rectangle.
+        // - Arrowhead points into the ground-label rectangle.
+        //
+        // Matching is still by the exact WorldItem entity, not by name/base type.
+        // ==================================================================
+        private void DrawConnectionArrow(
+            RectangleF toastRect,
+            RectangleF labelRect,
+            Color slotColor)
+        {
+            if (!Settings.ShowConnectionArrows.Value)
+                return;
+
+            try
+            {
+                var labelCenter = new SharpDX.Vector2(
+                    labelRect.Left + labelRect.Width / 2f,
+                    labelRect.Top + labelRect.Height / 2f);
+
+                var start = GetNearestToastCorner(
+                    toastRect,
+                    labelCenter);
+
+                var end = GetClosestPointOnRectangle(
+                    labelRect,
+                    start);
+
+                var dx = end.X - start.X;
+                var dy = end.Y - start.Y;
+                var length = (float)Math.Sqrt(dx * dx + dy * dy);
+
+                if (length < 2f)
+                    return;
+
+                var thickness =
+                    Settings.ConnectionArrowThickness.Value;
+
+                Graphics.DrawLine(
+                    start,
+                    end,
+                    thickness,
+                    slotColor);
+
+                // Arrowhead size scales gently with line thickness without
+                // adding another user-facing setting.
+                var headLength = Math.Max(
+                    10f,
+                    thickness * 4f);
+
+                var ux = dx / length;
+                var uy = dy / length;
+
+                var backX = end.X - ux * headLength;
+                var backY = end.Y - uy * headLength;
+
+                var perpX = -uy;
+                var perpY = ux;
+
+                var wing = headLength * 0.55f;
+
+                var leftWing = new SharpDX.Vector2(
+                    backX + perpX * wing,
+                    backY + perpY * wing);
+
+                var rightWing = new SharpDX.Vector2(
+                    backX - perpX * wing,
+                    backY - perpY * wing);
+
+                Graphics.DrawLine(
+                    end,
+                    leftWing,
+                    thickness,
+                    slotColor);
+
+                Graphics.DrawLine(
+                    end,
+                    rightWing,
+                    thickness,
+                    slotColor);
+            }
+            catch (Exception ex)
+            {
+                LogBetaError(
+                    "DrawConnectionArrow",
+                    ex);
+            }
+        }
+
+        private static SharpDX.Vector2 GetNearestToastCorner(
+            RectangleF rect,
+            SharpDX.Vector2 target)
+        {
+            var corners = new[]
+            {
+                new SharpDX.Vector2(rect.Left, rect.Top),
+                new SharpDX.Vector2(rect.Right, rect.Top),
+                new SharpDX.Vector2(rect.Left, rect.Bottom),
+                new SharpDX.Vector2(rect.Right, rect.Bottom)
+            };
+
+            return corners
+                .OrderBy(c =>
+                {
+                    var dx = c.X - target.X;
+                    var dy = c.Y - target.Y;
+                    return dx * dx + dy * dy;
+                })
+                .First();
+        }
+
+        private static SharpDX.Vector2 GetClosestPointOnRectangle(
+            RectangleF rect,
+            SharpDX.Vector2 source)
+        {
+            var x = Math.Max(
+                rect.Left,
+                Math.Min(rect.Right, source.X));
+
+            var y = Math.Max(
+                rect.Top,
+                Math.Min(rect.Bottom, source.Y));
+
+            // If the source projects directly inside one axis of the rectangle,
+            // clamp to the nearest actual edge so the arrow visibly touches the
+            // loot-label border rather than terminating somewhere inside it.
+            var distLeft = Math.Abs(source.X - rect.Left);
+            var distRight = Math.Abs(source.X - rect.Right);
+            var distTop = Math.Abs(source.Y - rect.Top);
+            var distBottom = Math.Abs(source.Y - rect.Bottom);
+
+            var min = Math.Min(
+                Math.Min(distLeft, distRight),
+                Math.Min(distTop, distBottom));
+
+            if (min == distLeft)
+                x = rect.Left;
+            else if (min == distRight)
+                x = rect.Right;
+            else if (min == distTop)
+                y = rect.Top;
+            else
+                y = rect.Bottom;
+
+            return new SharpDX.Vector2(x, y);
         }
 
 
@@ -1324,7 +1502,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] Beta log setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Beta log setup failed: {ex}");
             }
         }
 
@@ -1336,7 +1514,7 @@ namespace ItemAlert
                 {
                     "",
                     "============================================================",
-                    $"ItemAlert v1.0.0 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    $"ItemAlert v1.0.0.1 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"OS={Environment.OSVersion}",
                     $"64BitProcess={Environment.Is64BitProcess}",
                     $"ProcessorCount={Environment.ProcessorCount}",
@@ -1443,7 +1621,7 @@ namespace ItemAlert
                     "ITEM ALERT BETA SUPPORT BUNDLE",
                     "==============================",
                     $"Created={DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                    "PluginVersion=v1.0.0",
+                    "PluginVersion=v1.0.0.1.1",
                     $"League={_activeLeague}",
                     $"PriceStatus={_priceStatus}",
                     $"OS={Environment.OSVersion}",
@@ -1598,7 +1776,7 @@ namespace ItemAlert
         // ==================================================================
         // SETTINGS MIGRATION
         // ==================================================================
-        // ItemAlert v1.0.0 originally shipped Slot 4 as orange
+        // ItemAlert v1.0.0.1 originally shipped Slot 4 as orange
         // (255,150,50,255). ExileAPI persists ColorNode values in the user's
         // settings file, so simply changing the source default to white does
         // not affect an existing installation.
@@ -1717,7 +1895,7 @@ namespace ItemAlert
 
                 var latestBundle = GetLatestSupportBundlePath();
 
-                var title = $"[ItemAlert v1.0.0] Bug report";
+                var title = $"[ItemAlert v1.0.0.1] Bug report";
 
                 var body = BuildSupportIssueBody(latestBundle);
 
@@ -1757,7 +1935,7 @@ namespace ItemAlert
 
             return
                 "## ItemAlert Beta Report\n\n" +
-                $"**Plugin version:** v1.0.0" +
+                $"**Plugin version:** v1.0.0.1" +
                 $"**League:** {(_activeLeague ?? string.Empty)}\n" +
                 $"**Price status:** {(_priceStatus ?? string.Empty)}\n" +
                 $"**Minimum Divine:** {Settings.MinimumDivineValue.Value}\n" +
@@ -1845,7 +2023,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] Target-file setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Target-file setup failed: {ex}");
             }
         }
 
@@ -2189,7 +2367,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0] AlwaysTrack load failed: {ex}");
+                    $"[ItemAlert v1.0.0.1] AlwaysTrack load failed: {ex}");
             }
         }
 
@@ -2246,7 +2424,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0] Could not save Targets_Current.csv: {ex}");
+                    $"[ItemAlert v1.0.0.1] Could not save Targets_Current.csv: {ex}");
             }
         }
 
@@ -2349,7 +2527,7 @@ namespace ItemAlert
 
                 var summary = new List<string>
                 {
-                    "ITEM ALERT v1.0.0 - FULL ITEM COMPONENT SCAN",
+                    "ITEM ALERT v1.0.0.1 - FULL ITEM COMPONENT SCAN",
                     "================================================",
                     $"CaptureId=C{s.CaptureId:0000}",
                     $"Time={s.Time:yyyy-MM-dd HH:mm:ss.fff}",
@@ -2454,7 +2632,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0] Component scan failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.1] Component scan failed: {ex}");
             }
         }
 

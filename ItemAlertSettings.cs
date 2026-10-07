@@ -96,6 +96,19 @@ namespace ItemAlert
         public RangeNode<int> GroundHighlightCornerRadius { get; set; } =
             new RangeNode<int>(2, 0, 20);
 
+
+        [Menu(
+            "Show Connection Arrows",
+            "Draws a color-matched arrow from each alert toast to that exact item's ground-label highlight.")]
+        public ToggleNode ShowConnectionArrows { get; set; } =
+            new ToggleNode(true);
+
+        [Menu(
+            "Connection Arrow Thickness",
+            "Thickness of the line connecting an alert toast to its matched ground item.")]
+        public RangeNode<int> ConnectionArrowThickness { get; set; } =
+            new RangeNode<int>(3, 1, 8);
+
         [Menu("Alert Background Color")]
         public ColorNode AlertBackgroundColor { get; set; } =
             new ColorNode(new Color(0, 0, 0, 220));

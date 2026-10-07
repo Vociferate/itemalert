@@ -8,6 +8,7 @@ Please test:
 - unidentified to identified label changes
 - picking up one item while other alerts remain
 - different loot-filter font sizes
+- connection arrows pointing to the correct item when several alerts are active
 - different resolutions/aspect ratios
 - poe.ninja threshold and refresh changes
 

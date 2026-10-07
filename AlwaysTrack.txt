@@ -1,4 +1,4 @@
-# UniqueItemProbe v1.0.0
+# ItemAlert v1.0.0.1
 # Name|RenderItem.ResourcePath|OptionalDivineValue
 #
 # Items here are always tracked even if poe.ninja has no price,
