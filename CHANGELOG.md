@@ -2,20 +2,32 @@
 
 ## v1.0.0.2
 
-Initial public release.
+First public release baseline.
 
-### Included
+### Added
 
-- poe.ninja value targeting
-- Divine/Chaos/listing thresholds
-- `RenderItem.ResourcePath` matching
-- high-priority burst-drop scanning
+- poe.ninja-driven unique-value targeting
+- Divine, Chaos, and minimum-listing thresholds
+- dynamic poe.ninja league selector
+- automatic league list population from poe.ninja
+- Auto mode for the current challenge league
+- automatic price refresh when changing league
+- unidentified unique detection using `RenderItem.ResourcePath`
 - multiple simultaneous alerts
-- detection-order colors
+- detection-order color slots
 - exact ground-label highlighting
+- optional color-matched connection arrows
 - pickup-driven alert removal
-- center-relative X/Y positioning
-- support bundles
-- GitHub issue workflow
+- center-relative resolution-independent X/Y positioning
+- local support bundle generation
+- browser-based GitHub issue workflow
+- silent routine scanning
 
-- silent normal operation; routine scan/debug messages are file-only
+### Cleanup
+
+- removed the old `PoeNinjaLeague.txt` override file
+- removed obsolete timer-based alert expiration
+- removed the old top-left debug overlay
+- removed obsolete absolute-position controls
+- removed redundant double-border highlighting
+- removed stale arrow/debug implementations from earlier internal builds

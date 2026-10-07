@@ -183,3 +183,114 @@ Download the release ZIP and extract the `ItemAlert` folder into:
 
 ```text
 ExileApi/Plugins/Source/
+```
+
+The final structure should look like:
+
+```text
+ExileApi/
+└── Plugins/
+    └── Source/
+        └── ItemAlert/
+            ├── ItemAlert.cs
+            ├── ItemAlertSettings.cs
+            ├── ItemAlert.csproj
+            ├── AlwaysTrack.txt
+            └── SupportIssueUrl.txt
+```
+
+Then restart or reload ExileAPI.
+
+## Support
+
+### Create Support Bundle
+
+**Create Support Bundle** generates a local ZIP containing useful diagnostic information such as:
+
+- current targets
+- detection history
+- poe.ninja refresh history
+- error logs
+- configuration information
+- recent diagnostic summaries
+
+Large raw diagnostic files are not included by default.
+
+### Open Support Issue
+
+**Open Support Issue** opens:
+
+https://github.com/Vociferate/itemalert/issues/new
+
+in the user's default browser with report information prefilled.
+
+ItemAlert does not:
+
+- store a GitHub token
+- authenticate to GitHub
+- automatically submit an issue
+- automatically upload a support bundle
+
+The tester reviews the report and submits it manually.
+
+## Advanced Diagnostics
+
+The collapsed **Advanced / Diagnostic Scanner** is disabled by default.
+
+It exists for troubleshooting new or broken resource-path matches and is not required for normal:
+
+- detection
+- poe.ninja pricing
+- league selection
+- alerts
+- ground-label highlighting
+- connection arrows
+
+## Silent Operation
+
+Normal scanning is silent.
+
+ItemAlert does not print routine capture, scan, or debug messages on screen.
+
+Visible output is limited to:
+
+- a qualifying valuable-item alert
+- the matching ground-label highlight
+- the optional connection arrow
+- genuine error messages when something fails
+
+Routine diagnostic information is written to local log files instead.
+
+## Safety / Scope
+
+ItemAlert is an informational ExileAPI overlay.
+
+It does not:
+
+- automate looting
+- click items
+- send mouse input
+- send keyboard input
+- move the player
+- modify game memory
+- decrypt network traffic
+- bypass anti-cheat
+- automatically upload diagnostic files
+
+## Privacy
+
+Support bundles can contain local filesystem paths.
+
+Depending on where ExileAPI is installed, those paths may include a Windows username.
+
+Review support bundles before posting them publicly if that information is sensitive.
+
+## Version
+
+**v1.0.0.2**
+
+## License
+
+ItemAlert is released under the MIT License.
+
+See `LICENSE` for details.
