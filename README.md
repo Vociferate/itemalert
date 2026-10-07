@@ -4,9 +4,9 @@ ItemAlert is an ExileAPI plugin for Path of Exile that detects configured high-v
 
 It uses item artwork/resource paths exposed by ExileAPI together with current poe.ninja economy data.
 
-## Screenshot / Demo
+![ItemAlert Screenshot 1](https://i.imgur.com/u2q4GyV.png)
 
-https://imgur.com/a/D80nBTq
+![ItemAlert Screenshot 2](https://i.imgur.com/k42HMQU.png)
 
 ## Features
 
