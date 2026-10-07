@@ -35,9 +35,17 @@ For an unidentified unique, the unique name may not yet be available through nor
 
 ExileAPI can expose the unique-specific inventory artwork through `RenderItem.ResourcePath`.
 
-ItemAlert matches that resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
+ItemAlert first tries to match that full resource path against a target table built from public poe.ninja economy data plus optional entries in `AlwaysTrack.txt`.
 
-This allows supported high-value uniques to be detected before they have been identified in-game.
+Detection uses the following order:
+
+1. exact `RenderItem.ResourcePath`
+2. unambiguous artwork filename
+3. identified unique name, when the item has already been identified
+
+The artwork-filename fallback is only used when that filename maps to one unique target. Ambiguous filename collisions are ignored rather than guessed.
+
+This allows supported high-value uniques to be detected before identification while still providing a reliable fallback for identified items whose artwork path does not exactly match poe.ninja's CDN-derived path.
 
 ## Price Filtering
 
@@ -287,7 +295,7 @@ Review support bundles before posting them publicly if that information is sensi
 
 ## Version
 
-**v1.0.0.2**
+**v1.0.0.3**
 
 ## License
 

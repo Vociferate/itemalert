@@ -77,6 +77,14 @@ namespace ItemAlert
         private Dictionary<string, PriceTarget> _priceTargetsByName =
             new Dictionary<string, PriceTarget>(StringComparer.OrdinalIgnoreCase);
 
+        // Secondary lookup used when poe.ninja's CDN-derived resource path and
+        // ExileAPI's RenderItem.ResourcePath differ only by directory structure.
+        //
+        // Only unambiguous artwork filenames are retained. If two targets share
+        // the same filename, that filename is excluded from this fallback.
+        private Dictionary<string, PriceTarget> _priceTargetsByArtworkFile =
+            new Dictionary<string, PriceTarget>(StringComparer.OrdinalIgnoreCase);
+
         private Task<PriceRefreshResult> _priceRefreshTask;
         private DateTime _nextPriceRefresh = DateTime.MinValue;
         private string _targetsFile = string.Empty;
@@ -144,7 +152,7 @@ namespace ItemAlert
                     _logPath,
                     Environment.NewLine +
                     "======================================================================" + Environment.NewLine +
-                    $"ItemAlert v1.0.0.2 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
+                    $"ItemAlert v1.0.0.3 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
                     $"Logs folder: {_logsFolder}" + Environment.NewLine +
                     "======================================================================" + Environment.NewLine);
 
@@ -158,7 +166,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Failed to initialise Logs folder: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Failed to initialise Logs folder: {ex}");
             }
 
             foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.WorldItem])
@@ -456,25 +464,68 @@ namespace ItemAlert
                 if (string.IsNullOrWhiteSpace(resourcePath))
                     return;
 
-                var detectedTarget = DetectTarget(resourcePath);
+                // ----------------------------------------------------------
+                // DETECTION ORDER
+                // ----------------------------------------------------------
+                // 1) Exact RenderItem.ResourcePath match
+                // 2) Unambiguous artwork filename match
+                // 3) Identified UniqueName match
+                //
+                // Exact path remains authoritative. Artwork filename is a safe
+                // fallback only when that filename maps to exactly one current
+                // target. Identified-name lookup is last because it is not
+                // available for unidentified items.
+                // ----------------------------------------------------------
+                PriceTarget priceTarget = GetPriceTarget(resourcePath);
+                string detectedTarget = priceTarget?.Name ?? string.Empty;
+
+                if (priceTarget == null)
+                {
+                    priceTarget = GetPriceTargetByArtworkFilename(resourcePath);
+
+                    if (priceTarget != null)
+                        detectedTarget = priceTarget.Name;
+                }
+
+                if (priceTarget == null && mods.Identified)
+                {
+                    var identifiedName = Safe(() => mods.UniqueName);
+
+                    if (!string.IsNullOrWhiteSpace(identifiedName))
+                    {
+                        var byName = GetPriceTargetByName(identifiedName);
+
+                        if (byName != null &&
+                            MeetsCurrentPriceThresholds(byName))
+                        {
+                            priceTarget = byName;
+                            detectedTarget = identifiedName;
+                        }
+                    }
+                }
+
+                // Permanent built-in safety matches remain exact-path only.
+                if (priceTarget == null)
+                {
+                    detectedTarget = DetectBuiltInTarget(resourcePath);
+
+                    if (!string.IsNullOrWhiteSpace(detectedTarget))
+                    {
+                        priceTarget = GetPriceTargetByName(detectedTarget);
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(detectedTarget))
                     return;
 
-                var priceTarget = GetPriceTarget(resourcePath);
-
-                if (priceTarget == null ||
-                    priceTarget.DivineValue <= 0)
+                // A manual AlwaysTrack/built-in resource match is allowed even
+                // when it has no live price. All poe.ninja-derived fallbacks must
+                // still satisfy the current user thresholds.
+                if (priceTarget != null &&
+                    !priceTarget.AlwaysTrack &&
+                    !MeetsCurrentPriceThresholds(priceTarget))
                 {
-                    var byName =
-                        GetPriceTargetByName(detectedTarget);
-
-                    if (byName != null &&
-                        (byName.DivineValue > 0 ||
-                         byName.ChaosValue > 0))
-                    {
-                        priceTarget = byName;
-                    }
+                    return;
                 }
 
                 var now = DateTime.Now;
@@ -689,7 +740,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] {ex}");
             }
         }
 
@@ -759,7 +810,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Failed writing pair: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Failed writing pair: {ex}");
             }
 
             _unidentifiedSnapshots.Remove(candidate);
@@ -785,7 +836,7 @@ namespace ItemAlert
                 $"RequiredLevel:        {s.RequiredLevel}",
                 $"Implicit Summary:     {s.ImplicitSummary}",
                 $"RenderItem Resource: {s.RenderItemResourcePath}",
-                $"Detected Target:      {DetectTarget(s.RenderItemResourcePath)}",
+                $"Detected Target:      {ResolveTargetNameForDiagnostics(s.RenderItemResourcePath, s.Identified, s.UniqueName)}",
                 $"Mods.Hash:            {s.ModsHash}",
                 $"UniqueName field:     {s.UniqueNameField}",
                 $"Implicit mod array:   {s.ImplicitArray}",
@@ -843,7 +894,7 @@ namespace ItemAlert
                     $"RequiredLevel={s.RequiredLevel}",
                     $"ImplicitSummary={s.ImplicitSummary}",
                     $"RenderItemResourcePath={s.RenderItemResourcePath}",
-                    $"DetectedTarget={DetectTarget(s.RenderItemResourcePath)}",
+                    $"DetectedTarget={ResolveTargetNameForDiagnostics(s.RenderItemResourcePath, s.Identified, s.UniqueName)}",
                     $"ItemPath={s.ItemPath}",
                     $"GroundAddress=0x{s.GroundAddress:X}",
                     $"ItemAddress=0x{s.ItemAddress:X}",
@@ -868,18 +919,11 @@ namespace ItemAlert
         private const string HeadhunterResourcePath =
             "Art/2DItems/Belts/Headhunter.dds";
 
-        private string DetectTarget(string resourcePath)
+        private string DetectBuiltInTarget(string resourcePath)
         {
             if (string.IsNullOrWhiteSpace(resourcePath))
                 return string.Empty;
 
-            lock (_targetLock)
-            {
-                if (_priceTargets.TryGetValue(resourcePath, out var target))
-                    return target.Name;
-            }
-
-            // Permanent safety fallbacks.
             if (string.Equals(
                 resourcePath,
                 MagebloodResourcePath,
@@ -895,6 +939,42 @@ namespace ItemAlert
             return string.Empty;
         }
 
+        // Diagnostic-only name resolver used by capture/log files.
+        // This mirrors the public detector's lookup order without modifying
+        // active alerts:
+        //   1) exact resource path
+        //   2) unambiguous artwork filename
+        //   3) identified unique name
+        //   4) exact built-in safety path
+        private string ResolveTargetNameForDiagnostics(
+            string resourcePath,
+            bool identified,
+            string uniqueName)
+        {
+            var target = GetPriceTarget(resourcePath);
+
+            if (target != null)
+                return target.Name ?? string.Empty;
+
+            target = GetPriceTargetByArtworkFilename(resourcePath);
+
+            if (target != null)
+                return target.Name ?? string.Empty;
+
+            if (identified && !string.IsNullOrWhiteSpace(uniqueName))
+            {
+                target = GetPriceTargetByName(uniqueName);
+
+                if (target != null &&
+                    MeetsCurrentPriceThresholds(target))
+                {
+                    return target.Name ?? uniqueName;
+                }
+            }
+
+            return DetectBuiltInTarget(resourcePath);
+        }
+
         private PriceTarget GetPriceTarget(string resourcePath)
         {
             if (string.IsNullOrWhiteSpace(resourcePath))
@@ -903,6 +983,23 @@ namespace ItemAlert
             lock (_targetLock)
             {
                 _priceTargets.TryGetValue(resourcePath, out var target);
+                return target;
+            }
+        }
+
+        private PriceTarget GetPriceTargetByArtworkFilename(string resourcePath)
+        {
+            var artworkFile = GetArtworkFilename(resourcePath);
+
+            if (string.IsNullOrWhiteSpace(artworkFile))
+                return null;
+
+            lock (_targetLock)
+            {
+                _priceTargetsByArtworkFile.TryGetValue(
+                    artworkFile,
+                    out var target);
+
                 return target;
             }
         }
@@ -917,6 +1014,103 @@ namespace ItemAlert
                 _priceTargetsByName.TryGetValue(name, out var target);
                 return target;
             }
+        }
+
+        private bool MeetsCurrentPriceThresholds(PriceTarget target)
+        {
+            if (target == null)
+                return false;
+
+            if (target.AlwaysTrack)
+                return true;
+
+            var minimumDivines =
+                Settings.MinimumDivineValue.Value;
+
+            var minimumChaos =
+                Settings.MinimumChaosValue.Value;
+
+            var minimumListings =
+                Settings.MinimumListings.Value;
+
+            var meetsDivine =
+                minimumDivines > 0 &&
+                target.DivineValue >= minimumDivines;
+
+            var meetsChaos =
+                minimumChaos > 0 &&
+                target.ChaosValue >= minimumChaos;
+
+            return
+                (meetsDivine || meetsChaos) &&
+                target.ListingCount >= minimumListings;
+        }
+
+        private static Dictionary<string, PriceTarget>
+            BuildArtworkFilenameIndex(
+                Dictionary<string, PriceTarget> targets)
+        {
+            var result =
+                new Dictionary<string, PriceTarget>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            if (targets == null || targets.Count == 0)
+                return result;
+
+            // Track collisions separately. A filename is useful as a fallback
+            // only when it maps to one unique target name.
+            var collisions =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (var target in targets.Values)
+            {
+                if (target == null ||
+                    string.IsNullOrWhiteSpace(target.ResourcePath))
+                    continue;
+
+                var artworkFile =
+                    GetArtworkFilename(target.ResourcePath);
+
+                if (string.IsNullOrWhiteSpace(artworkFile))
+                    continue;
+
+                if (!result.TryGetValue(
+                        artworkFile,
+                        out var existing))
+                {
+                    result[artworkFile] = target;
+                    continue;
+                }
+
+                if (!string.Equals(
+                        existing.Name,
+                        target.Name,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    collisions.Add(artworkFile);
+                }
+            }
+
+            foreach (var collision in collisions)
+                result.Remove(collision);
+
+            return result;
+        }
+
+        private static string GetArtworkFilename(string resourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(resourcePath))
+                return string.Empty;
+
+            var normalized =
+                resourcePath.Replace('\\', '/').Trim();
+
+            var index = normalized.LastIndexOf('/');
+
+            return index >= 0
+                ? normalized.Substring(index + 1)
+                : normalized;
         }
 
         // ==================================================================
@@ -1514,7 +1708,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Beta log setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Beta log setup failed: {ex}");
             }
         }
 
@@ -1526,7 +1720,7 @@ namespace ItemAlert
                 {
                     "",
                     "============================================================",
-                    $"ItemAlert v1.0.0.2 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    $"ItemAlert v1.0.0.3 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"OS={Environment.OSVersion}",
                     $"64BitProcess={Environment.Is64BitProcess}",
                     $"ProcessorCount={Environment.ProcessorCount}",
@@ -1634,7 +1828,7 @@ namespace ItemAlert
                     "ITEM ALERT BETA SUPPORT BUNDLE",
                     "==============================",
                     $"Created={DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                    "PluginVersion=v1.0.0.2.1",
+                    "PluginVersion=v1.0.0.3",
                     $"League={_activeLeague}",
                     $"PriceStatus={_priceStatus}",
                     $"OS={Environment.OSVersion}",
@@ -1790,7 +1984,7 @@ namespace ItemAlert
         // ==================================================================
         // SETTINGS MIGRATION
         // ==================================================================
-        // ItemAlert v1.0.0.2 originally shipped Slot 4 as orange
+        // ItemAlert v1.0.0.3 originally shipped Slot 4 as orange
         // (255,150,50,255). ExileAPI persists ColorNode values in the user's
         // settings file, so simply changing the source default to white does
         // not affect an existing installation.
@@ -1909,7 +2103,7 @@ namespace ItemAlert
 
                 var latestBundle = GetLatestSupportBundlePath();
 
-                var title = $"[ItemAlert v1.0.0.2] Bug report";
+                var title = $"[ItemAlert v1.0.0.3] Bug report";
 
                 var body = BuildSupportIssueBody(latestBundle);
 
@@ -1949,7 +2143,7 @@ namespace ItemAlert
 
             return
                 "## ItemAlert Beta Report\n\n" +
-                $"**Plugin version:** v1.0.0.2" +
+                $"**Plugin version:** v1.0.0.3" +
                 $"**League:** {(_activeLeague ?? string.Empty)}\n" +
                 $"**Price status:** {(_priceStatus ?? string.Empty)}\n" +
                 $"**Minimum Divine:** {Settings.MinimumDivineValue.Value}\n" +
@@ -2026,7 +2220,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Target-file setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Target-file setup failed: {ex}");
             }
         }
 
@@ -2062,6 +2256,8 @@ namespace ItemAlert
                         {
                             _priceTargets = result.Targets;
                             _priceTargetsByName = result.TargetsByName;
+                            _priceTargetsByArtworkFile =
+                                BuildArtworkFilenameIndex(result.Targets);
                         }
 
                         ApplyPoeNinjaLeagueOptions(result);
@@ -2218,7 +2414,7 @@ namespace ItemAlert
                 if (!PoeNinjaHttp.DefaultRequestHeaders.UserAgent.Any())
                 {
                     PoeNinjaHttp.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "ItemAlert/1.0.0.2 (+https://github.com/Vociferate/itemalert)");
+                        "ItemAlert/1.0.0.3 (+https://github.com/Vociferate/itemalert)");
                 }
 
                 // Always use poe.ninja's live PoE 1 economy-league list.
@@ -2311,7 +2507,7 @@ namespace ItemAlert
                         // the CDN icon URL cannot be converted to an internal resource path.
                         // The entry with the largest listing count is the best "typical"
                         // market estimate for an unidentified unique with multiple variants.
-                        if (divineValue > 0)
+                        if (divineValue > 0 || chaosValue > 0)
                         {
                             var nameTarget = new PriceTarget
                             {
@@ -2457,7 +2653,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.2] AlwaysTrack load failed: {ex}");
+                    $"[ItemAlert v1.0.0.3] AlwaysTrack load failed: {ex}");
             }
         }
 
@@ -2514,7 +2710,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.2] Could not save Targets_Current.csv: {ex}");
+                    $"[ItemAlert v1.0.0.3] Could not save Targets_Current.csv: {ex}");
             }
         }
 
@@ -2617,7 +2813,7 @@ namespace ItemAlert
 
                 var summary = new List<string>
                 {
-                    "ITEM ALERT v1.0.0.2 - FULL ITEM COMPONENT SCAN",
+                    "ITEM ALERT v1.0.0.3 - FULL ITEM COMPONENT SCAN",
                     "================================================",
                     $"CaptureId=C{s.CaptureId:0000}",
                     $"Time={s.Time:yyyy-MM-dd HH:mm:ss.fff}",
@@ -2629,7 +2825,7 @@ namespace ItemAlert
                     $"ImplicitSummary={s.ImplicitSummary}",
                     $"ItemAddress=0x{s.ItemAddress:X}",
                     $"RenderItemResourcePath={s.RenderItemResourcePath}",
-                    $"DetectedTarget={DetectTarget(s.RenderItemResourcePath)}",
+                    $"DetectedTarget={ResolveTargetNameForDiagnostics(s.RenderItemResourcePath, s.Identified, s.UniqueName)}",
                     "",
                     "COMPONENTS",
                     "----------"
@@ -2722,7 +2918,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.2] Component scan failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Component scan failed: {ex}");
             }
         }
 
@@ -2895,7 +3091,7 @@ namespace ItemAlert
                     Csv(s.RequiredLevel),
                     Csv(s.ImplicitSummary),
                     Csv(s.RenderItemResourcePath),
-                    Csv(DetectTarget(s.RenderItemResourcePath)),
+                    Csv(ResolveTargetNameForDiagnostics(s.RenderItemResourcePath, s.Identified, s.UniqueName)),
                     Csv(s.ItemPath),
                     Csv($"0x{s.GroundAddress:X}"),
                     Csv($"0x{s.ItemAddress:X}"),
