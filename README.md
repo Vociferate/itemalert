@@ -6,6 +6,12 @@ It uses item artwork/resource paths exposed by ExileAPI together with current po
 
 ## Features
 
+## Screenshots
+
+![Item Alert Screenshot 1](https://i.imgur.com/u2q4GyV.png)
+
+![Item Alert Screenshot 2](https://i.imgur.com/k42HMQU.png)
+
 - Detects valuable uniques while still unidentified
 - Tracks the same ground item through identified/unidentified label changes
 - Uses `RenderItem.ResourcePath` for unique artwork matching
