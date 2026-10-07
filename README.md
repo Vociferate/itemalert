@@ -226,11 +226,13 @@ Large raw diagnostic files are not included by default.
 
 ### Open Support Issue
 
-**Open Support Issue** opens:
+**Open Support Issue** now performs three user-initiated steps:
 
-https://github.com/Vociferate/itemalert/issues/new
+1. creates a fresh support bundle
+2. opens https://github.com/Vociferate/itemalert/issues/new in the default browser with a short report template
+3. opens the local `SupportBundles` folder so the generated ZIP is ready to drag into the GitHub issue
 
-in the user's default browser with report information prefilled.
+The issue is **not** submitted automatically.
 
 ItemAlert does not:
 
@@ -295,7 +297,7 @@ Review support bundles before posting them publicly if that information is sensi
 
 ## Version
 
-**v1.0.0.3**
+**v1.0.0.4**
 
 ## License
 

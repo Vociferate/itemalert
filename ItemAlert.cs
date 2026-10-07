@@ -56,7 +56,7 @@ namespace ItemAlert
         private string _supportBundlesFolder = string.Empty;
 
         // ------------------------------------------------------------------
-        // Public beta support workflow
+        // Public support workflow
         // ------------------------------------------------------------------
         // The plugin NEVER stores or uses a GitHub token. The configured URL
         // is only opened in the user's default browser so the tester can review
@@ -144,7 +144,7 @@ namespace ItemAlert
 
                 // These buttons are deliberately user-initiated. Nothing is
                 // uploaded and no browser is opened without the tester clicking.
-                Settings.CreateSupportBundle.OnPressed = CreateSupportBundle;
+                Settings.CreateSupportBundle.OnPressed = () => CreateSupportBundle();
                 Settings.OpenSupportIssue.OnPressed = OpenSupportIssue;
 
 
@@ -152,7 +152,7 @@ namespace ItemAlert
                     _logPath,
                     Environment.NewLine +
                     "======================================================================" + Environment.NewLine +
-                    $"ItemAlert v1.0.0.3 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
+                    $"ItemAlert v1.0.0.4 started {DateTime.Now:yyyy-MM-dd HH:mm:ss}" + Environment.NewLine +
                     $"Logs folder: {_logsFolder}" + Environment.NewLine +
                     "======================================================================" + Environment.NewLine);
 
@@ -166,7 +166,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Failed to initialise Logs folder: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Failed to initialise Logs folder: {ex}");
             }
 
             foreach (var entity in GameController.EntityListWrapper.ValidEntitiesByType[EntityType.WorldItem])
@@ -740,7 +740,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] {ex}");
             }
         }
 
@@ -810,7 +810,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Failed writing pair: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Failed writing pair: {ex}");
             }
 
             _unidentifiedSnapshots.Remove(candidate);
@@ -1708,7 +1708,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Beta log setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Beta log setup failed: {ex}");
             }
         }
 
@@ -1720,7 +1720,7 @@ namespace ItemAlert
                 {
                     "",
                     "============================================================",
-                    $"ItemAlert v1.0.0.3 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    $"ItemAlert v1.0.0.4 startup {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"OS={Environment.OSVersion}",
                     $"64BitProcess={Environment.Is64BitProcess}",
                     $"ProcessorCount={Environment.ProcessorCount}",
@@ -1806,7 +1806,7 @@ namespace ItemAlert
             }
         }
 
-        private void CreateSupportBundle()
+        private string CreateSupportBundle()
         {
             try
             {
@@ -1825,10 +1825,10 @@ namespace ItemAlert
                 var infoPath = Path.Combine(staging, "SupportInfo.txt");
                 var info = new List<string>
                 {
-                    "ITEM ALERT BETA SUPPORT BUNDLE",
+                    "ITEMALERT SUPPORT BUNDLE",
                     "==============================",
                     $"Created={DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                    "PluginVersion=v1.0.0.3",
+                    "PluginVersion=v1.0.0.4",
                     $"League={_activeLeague}",
                     $"PriceStatus={_priceStatus}",
                     $"OS={Environment.OSVersion}",
@@ -1892,10 +1892,11 @@ namespace ItemAlert
 
                 Directory.Delete(staging, true);
 
-                // Remember the newest bundle so the issue template can tell the
-                // tester exactly which ZIP to attach to the GitHub issue.
+                // Remember the newest bundle so the issue workflow can tell
+                // the tester exactly which ZIP to attach to the GitHub issue.
                 _latestSupportBundlePath = zipPath;
 
+                return zipPath;
             }
             catch (Exception ex)
             {
@@ -1903,6 +1904,8 @@ namespace ItemAlert
                 DebugWindow.LogError(
                     $"[ItemAlert] Failed to create support bundle: {ex.Message}",
                     8);
+
+                return string.Empty;
             }
         }
 
@@ -1984,7 +1987,7 @@ namespace ItemAlert
         // ==================================================================
         // SETTINGS MIGRATION
         // ==================================================================
-        // ItemAlert v1.0.0.3 originally shipped Slot 4 as orange
+        // ItemAlert v1.0.0.4 originally shipped Slot 4 as orange
         // (255,150,50,255). ExileAPI persists ColorNode values in the user's
         // settings file, so simply changing the source default to white does
         // not affect an existing installation.
@@ -2033,7 +2036,7 @@ namespace ItemAlert
                     _supportIssueUrlFile,
                     new[]
                     {
-                        "# ItemAlert beta support issue URL",
+                        "# ItemAlert support issue URL",
                         "#",
                         "# Replace the URL below with the GitHub repository's new-issue URL.",
                         "# Examples:",
@@ -2083,15 +2086,20 @@ namespace ItemAlert
                 var baseUrl = ReadSupportIssueUrl();
 
                 if (string.IsNullOrWhiteSpace(baseUrl) ||
-                    baseUrl.Contains("OWNER/REPOSITORY", StringComparison.OrdinalIgnoreCase))
+                    baseUrl.Contains(
+                        "OWNER/REPOSITORY",
+                        StringComparison.OrdinalIgnoreCase))
                 {
                     DebugWindow.LogError(
-                        "[ItemAlert] Set your GitHub new-issue URL in SupportIssueUrl.txt first.",
+                        "[ItemAlert] SupportIssueUrl.txt does not contain the ItemAlert GitHub issue URL.",
                         8);
                     return;
                 }
 
-                if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var issueUri) ||
+                if (!Uri.TryCreate(
+                        baseUrl,
+                        UriKind.Absolute,
+                        out var issueUri) ||
                     (issueUri.Scheme != Uri.UriSchemeHttps &&
                      issueUri.Scheme != Uri.UriSchemeHttp))
                 {
@@ -2101,23 +2109,78 @@ namespace ItemAlert
                     return;
                 }
 
-                var latestBundle = GetLatestSupportBundlePath();
+                // Create a fresh bundle immediately before opening GitHub so the
+                // tester has a current ZIP ready to attach.
+                var bundlePath = CreateSupportBundle();
+                var bundleName =
+                    string.IsNullOrWhiteSpace(bundlePath)
+                        ? "No support bundle was created."
+                        : Path.GetFileName(bundlePath);
 
-                var title = $"[ItemAlert v1.0.0.3] Bug report";
+                // Keep the URL intentionally short. Very long shell URLs can fail
+                // to launch reliably on Windows. Detailed diagnostics live in the
+                // support ZIP instead.
+                var title =
+                    $"[ItemAlert v1.0.0.4] Support issue";
 
-                var body = BuildSupportIssueBody(latestBundle);
+                var body =
+                    "## ItemAlert Support Report\n\n" +
+                    $"**Version:** v1.0.0.4\n" +
+                    $"**League:** {_activeLeague}\n" +
+                    $"**Support bundle:** `{bundleName}`\n\n" +
+                    "### What happened?\n" +
+                    "<!-- Describe the problem here. -->\n\n" +
+                    "### Expected behavior\n" +
+                    "<!-- What did you expect instead? -->\n\n" +
+                    "Please attach the generated support ZIP to this issue.";
 
-                // Preserve any existing query parameters, such as a GitHub issue
-                // template, and append the prefilled title/body safely.
-                var separator = baseUrl.Contains("?") ? "&" : "?";
+                var separator =
+                    baseUrl.Contains("?") ? "&" : "?";
+
                 var url =
                     baseUrl +
                     separator +
-                    "title=" + Uri.EscapeDataString(title) +
-                    "&body=" + Uri.EscapeDataString(body);
+                    "title=" +
+                    Uri.EscapeDataString(title) +
+                    "&body=" +
+                    Uri.EscapeDataString(body);
 
-                // UseShellExecute=true opens the URL using the tester's normal
-                // browser. There is no hidden HTTP POST and no credential use.
+                if (!TryOpenExternalUrl(url))
+                {
+                    DebugWindow.LogError(
+                        "[ItemAlert] Windows could not open the GitHub support page. " +
+                        "Open https://github.com/Vociferate/itemalert/issues/new manually.",
+                        10);
+                    return;
+                }
+
+                // Also open the local support folder so the generated ZIP is
+                // immediately available for drag/drop into the GitHub issue.
+                TryOpenFolder(_supportBundlesFolder);
+            }
+            catch (Exception ex)
+            {
+                LogBetaError(
+                    "OpenSupportIssue",
+                    ex);
+
+                DebugWindow.LogError(
+                    $"[ItemAlert] Could not open support issue page: {ex.Message}",
+                    8);
+            }
+        }
+
+        // Try several Windows-supported launch methods. ExileAPI hosts plugins
+        // inside its own .NET process, and shell behavior can differ between
+        // Windows/.NET configurations, so a fallback chain is safer than relying
+        // on one Process.Start call.
+        private static bool TryOpenExternalUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return false;
+
+            try
+            {
                 Process.Start(
                     new ProcessStartInfo
                     {
@@ -2125,45 +2188,67 @@ namespace ItemAlert
                         UseShellExecute = true
                     });
 
+                return true;
             }
-            catch (Exception ex)
+            catch
             {
-                LogBetaError("OpenSupportIssue", ex);
-                DebugWindow.LogError(
-                    $"[ItemAlert] Could not open support issue page: {ex.Message}",
-                    8);
+            }
+
+            try
+            {
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{url}\"",
+                        UseShellExecute = true
+                    });
+
+                return true;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c start \"\" \"{url}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
-        private string BuildSupportIssueBody(string latestBundle)
+        private static void TryOpenFolder(string folderPath)
         {
-            var bundleName = string.IsNullOrWhiteSpace(latestBundle)
-                ? "No support bundle created yet."
-                : Path.GetFileName(latestBundle);
+            try
+            {
+                if (string.IsNullOrWhiteSpace(folderPath) ||
+                    !Directory.Exists(folderPath))
+                    return;
 
-            return
-                "## ItemAlert Beta Report\n\n" +
-                $"**Plugin version:** v1.0.0.3" +
-                $"**League:** {(_activeLeague ?? string.Empty)}\n" +
-                $"**Price status:** {(_priceStatus ?? string.Empty)}\n" +
-                $"**Minimum Divine:** {Settings.MinimumDivineValue.Value}\n" +
-                $"**Minimum Chaos:** {Settings.MinimumChaosValue.Value}\n" +
-                $"**Minimum listings:** {Settings.MinimumListings.Value}\n\n" +
-                "### What happened?\n" +
-                "<!-- Describe the problem here. -->\n\n" +
-                "### What did you expect to happen?\n" +
-                "<!-- Describe the expected result here. -->\n\n" +
-                "### Item / situation\n" +
-                "- Item name (if known):\n" +
-                "- Identified or unidentified:\n" +
-                "- Map / zone:\n\n" +
-                "### Support bundle\n" +
-                $"Latest generated bundle: `{bundleName}`\n\n" +
-                "Please drag/drop that ZIP into this issue if one was created.\n\n" +
-                "### Screenshot\n" +
-                "<!-- Drag/drop a screenshot here if the issue is visual. -->\n\n" +
-                "### Privacy note\n" +
-                "Support bundles can contain local installation paths. Review the ZIP before posting publicly if that matters to you.\n";
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = folderPath,
+                        UseShellExecute = true
+                    });
+            }
+            catch
+            {
+                // Folder opening is convenience-only. A failure here must not
+                // affect issue-page creation.
+            }
         }
 
         private string GetLatestSupportBundlePath()
@@ -2220,7 +2305,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Target-file setup failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Target-file setup failed: {ex}");
             }
         }
 
@@ -2414,7 +2499,7 @@ namespace ItemAlert
                 if (!PoeNinjaHttp.DefaultRequestHeaders.UserAgent.Any())
                 {
                     PoeNinjaHttp.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "ItemAlert/1.0.0.3 (+https://github.com/Vociferate/itemalert)");
+                        "ItemAlert/1.0.0.4 (+https://github.com/Vociferate/itemalert)");
                 }
 
                 // Always use poe.ninja's live PoE 1 economy-league list.
@@ -2653,7 +2738,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.3] AlwaysTrack load failed: {ex}");
+                    $"[ItemAlert v1.0.0.4] AlwaysTrack load failed: {ex}");
             }
         }
 
@@ -2710,7 +2795,7 @@ namespace ItemAlert
             catch (Exception ex)
             {
                 DebugWindow.LogError(
-                    $"[ItemAlert v1.0.0.3] Could not save Targets_Current.csv: {ex}");
+                    $"[ItemAlert v1.0.0.4] Could not save Targets_Current.csv: {ex}");
             }
         }
 
@@ -2813,7 +2898,7 @@ namespace ItemAlert
 
                 var summary = new List<string>
                 {
-                    "ITEM ALERT v1.0.0.3 - FULL ITEM COMPONENT SCAN",
+                    "ITEM ALERT v1.0.0.4 - FULL ITEM COMPONENT SCAN",
                     "================================================",
                     $"CaptureId=C{s.CaptureId:0000}",
                     $"Time={s.Time:yyyy-MM-dd HH:mm:ss.fff}",
@@ -2918,7 +3003,7 @@ namespace ItemAlert
             }
             catch (Exception ex)
             {
-                DebugWindow.LogError($"[ItemAlert v1.0.0.3] Component scan failed: {ex}");
+                DebugWindow.LogError($"[ItemAlert v1.0.0.4] Component scan failed: {ex}");
             }
         }
 

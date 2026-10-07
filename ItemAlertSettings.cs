@@ -136,7 +136,7 @@ namespace ItemAlert
             new ButtonNode();
 
         [Menu("Open Support Issue",
-            "Opens the ItemAlert GitHub issue page in your default browser with a report prefilled. Nothing is submitted automatically.")]
+            "Creates a fresh support bundle, opens the ItemAlert GitHub issue page, and opens the local SupportBundles folder so the ZIP can be attached. Nothing is submitted automatically.")]
         public ButtonNode OpenSupportIssue { get; set; } =
             new ButtonNode();
 
